@@ -1,2 +1,3 @@
-# mq-rate-limit-ai-api
-Ứng dụng Message Queue (RabbitMQ) xử lý bất đồng bộ và rate-limit AI API
+# Smart Warehouse - AI Forecast
+Giai đoạn 1 (Giữa kỳ): Trình bày kiến trúc Prototype RabbitMQ, Docker, Locust load test x10 requests.
+Giai đoạn 2 (Cuối kỳ): Cấu trúc tổng thể với Next.js/Nuxt, Go/FastAPI, PostgreSQL và cách gọi Gemini API.
