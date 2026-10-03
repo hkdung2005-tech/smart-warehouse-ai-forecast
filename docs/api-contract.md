@@ -68,6 +68,7 @@ Lỗi:
 Quy tắc phía API:
 - Lưu job vào DB và **commit** trước khi publish. Worker không tìm thấy job trong DB sẽ trả message về queue và thử lại mãi.
 - Publish lỗi sau khi đã lưu DB: API chuyển job sang `failed` (`error_message`: "Publish to queue failed"), ghi event `publish_failed` vào `job_logs` rồi trả `503`.
+- Nếu publish thành công nhưng không ghi được event `published`, API vẫn trả `202` để client không gửi trùng job; lỗi ghi log được ghi nhận ở API log.
 
 ### 3.3 `GET /jobs/{job_id}`
 
