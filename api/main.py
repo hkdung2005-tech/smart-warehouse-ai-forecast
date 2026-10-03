@@ -1,17 +1,21 @@
 """
 Smart Warehouse AI Forecast — FastAPI Application
 SCRUM-13: Khung API kết nối PostgreSQL và RabbitMQ.
-          Các route nghiệp vụ (POST /jobs, GET /jobs/{id}, DLQ)
-          sẽ được Chấn implement theo API contract SCRUM-12.
+SCRUM-17: POST /jobs lưu job và publish vào RabbitMQ.
 """
 
+import asyncio
+import json
 import os
 import logging
+import uuid
 from contextlib import asynccontextmanager
+from datetime import timezone
 
 import asyncpg
 import aio_pika
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request, status
+from pydantic import BaseModel, field_validator
 
 # ─────────────────────────────────────────────
 # Logging
@@ -95,7 +99,120 @@ async def health():
 
 
 # ─────────────────────────────────────────────
-# Các route nghiệp vụ — Chấn implement (SCRUM-12)
+# POST /jobs
 # ─────────────────────────────────────────────
-# POST /jobs           → tạo job, lưu DB, đẩy RabbitMQ
-# GET  /jobs/{job_id}  → tra cứu trạng thái job
+class JobCreateRequest(BaseModel):
+    payload: str
+
+    @field_validator("payload")
+    @classmethod
+    def payload_must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("payload must not be empty")
+        return value
+
+
+@app.post("/jobs", status_code=status.HTTP_202_ACCEPTED, tags=["jobs"])
+async def create_job(body: JobCreateRequest, request: Request):
+    job_id = uuid.uuid4()
+    db_pool = request.app.state.db_pool
+
+    try:
+        async with db_pool.acquire() as conn:
+            async with conn.transaction():
+                created_at = await conn.fetchval(
+                    """
+                    INSERT INTO jobs (job_id, payload, status, retry_count)
+                    VALUES ($1, $2, 'pending', 0)
+                    RETURNING created_at
+                    """,
+                    job_id,
+                    body.payload,
+                )
+                await conn.execute(
+                    """
+                    INSERT INTO job_logs (job_id, event, created_at)
+                    VALUES ($1, 'created', CURRENT_TIMESTAMP)
+                    """,
+                    job_id,
+                )
+    except (asyncpg.PostgresError, OSError, asyncio.TimeoutError):
+        logger.exception("Could not save new job %s", job_id)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Service unavailable",
+        )
+
+    message = aio_pika.Message(
+        body=json.dumps(
+            {"job_id": str(job_id), "payload": body.payload, "retry_count": 0},
+            ensure_ascii=False,
+        ).encode("utf-8"),
+        content_type="application/json",
+        delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
+    )
+    try:
+        async with request.app.state.rmq_connection.channel(
+            publisher_confirms=True
+        ) as channel:
+            await channel.default_exchange.publish(
+                message,
+                routing_key=MAIN_QUEUE,
+                mandatory=True,
+            )
+    except (
+        aio_pika.exceptions.AMQPException,
+        aio_pika.exceptions.ChannelInvalidStateError,
+        OSError,
+        asyncio.TimeoutError,
+    ):
+        logger.exception("Could not publish job %s to RabbitMQ", job_id)
+        try:
+            async with db_pool.acquire() as conn:
+                async with conn.transaction():
+                    await conn.execute(
+                        """
+                        UPDATE jobs
+                        SET status = 'failed',
+                            error_message = 'Publish to queue failed',
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE job_id = $1
+                        """,
+                        job_id,
+                    )
+                    await conn.execute(
+                        """
+                        INSERT INTO job_logs (job_id, event, created_at)
+                        VALUES ($1, 'publish_failed', CURRENT_TIMESTAMP)
+                        """,
+                        job_id,
+                    )
+        except (asyncpg.PostgresError, OSError, asyncio.TimeoutError):
+            logger.exception("Could not record publish failure for job %s", job_id)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Service unavailable",
+        )
+
+    try:
+        async with db_pool.acquire() as conn:
+            await conn.execute(
+                """
+                INSERT INTO job_logs (job_id, event, created_at)
+                VALUES ($1, 'published', CURRENT_TIMESTAMP)
+                """,
+                job_id,
+            )
+    except (asyncpg.PostgresError, OSError, asyncio.TimeoutError):
+        logger.exception(
+            "Job %s was published, but its published event could not be recorded",
+            job_id,
+        )
+
+    return {
+        "job_id": job_id,
+        "status": "pending",
+        "created_at": created_at.replace(tzinfo=timezone.utc)
+        .isoformat()
+        .replace("+00:00", "Z"),
+    }
