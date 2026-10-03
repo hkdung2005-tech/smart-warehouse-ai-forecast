@@ -1,2 +1,5 @@
 fastapi
 uvicorn[standard]
+asyncpg          # PostgreSQL async driver
+aio-pika         # RabbitMQ async client (AMQP)
+python-dotenv    # đọc .env
