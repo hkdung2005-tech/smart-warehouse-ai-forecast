@@ -10,6 +10,7 @@ import os
 import logging
 import uuid
 from contextlib import asynccontextmanager
+from datetime import timezone
 
 import asyncpg
 import aio_pika
@@ -203,14 +204,15 @@ async def create_job(body: JobCreateRequest, request: Request):
                 job_id,
             )
     except (asyncpg.PostgresError, OSError, asyncio.TimeoutError):
-        logger.exception("Could not record successful publish for job %s", job_id)
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Service unavailable",
+        logger.exception(
+            "Job %s was published, but its published event could not be recorded",
+            job_id,
         )
 
     return {
         "job_id": job_id,
         "status": "pending",
-        "created_at": created_at,
+        "created_at": created_at.replace(tzinfo=timezone.utc)
+        .isoformat()
+        .replace("+00:00", "Z"),
     }
