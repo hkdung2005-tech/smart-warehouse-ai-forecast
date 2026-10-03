@@ -59,7 +59,7 @@ async def lifespan(app: FastAPI):
 
     # ── Khai báo queue (idempotent) ──────────
     async with app.state.rmq_connection.channel() as ch:
-        # DLQ khai báo trước (main queue cần biết tên DLQ)
+        # Khai báo queue theo chuẩn API contract: chỉ có durable=True, KHÔNG thêm params khác
         await ch.declare_queue(DLQ,        durable=True)
         await ch.declare_queue(MAIN_QUEUE, durable=True)
         # Retry queues do Worker tự declare khi khởi động
@@ -86,53 +86,16 @@ app = FastAPI(
 
 # ─────────────────────────────────────────────
 # GET /health
-# Theo API contract mục 3.1 — trả {"status": "ok"}
-# Mở rộng thêm checks để dễ debug môi trường
+# Theo API contract mục 3.1
 # ─────────────────────────────────────────────
 @app.get("/health", tags=["infra"])
-async def health(request: Request):
-    """
-    Kiểm tra API và các service phụ thuộc còn sống.
-
-    Response luôn 200 (circuit-breaker phía client tự xử lý);
-    trường `status` là "ok" khi mọi check đều pass,
-    "degraded" khi có check lỗi.
-    """
-    checks: dict = {}
-
-    # ── PostgreSQL ───────────────────────────
-    try:
-        async with request.app.state.db_pool.acquire() as conn:
-            await conn.fetchval("SELECT 1")
-        checks["postgres"] = "ok"
-    except Exception as exc:
-        logger.error("PostgreSQL health check failed: %s", exc)
-        checks["postgres"] = "error"
-
-    # ── RabbitMQ ─────────────────────────────
-    try:
-        if not request.app.state.rmq_connection.is_closed:
-            checks["rabbitmq"] = "ok"
-        else:
-            checks["rabbitmq"] = "error"
-    except Exception as exc:
-        logger.error("RabbitMQ health check failed: %s", exc)
-        checks["rabbitmq"] = "error"
-
-    overall_status = "ok" if all(v == "ok" for v in checks.values()) else "degraded"
-
-    return {
-        "status": overall_status,
-        "checks": checks,
-        "queues": {
-            "main": MAIN_QUEUE,
-            "dlq":  DLQ,
-        },
-    }
+async def health():
+    """Kiểm tra API còn sống."""
+    return {"status": "ok"}
 
 
 # ─────────────────────────────────────────────
 # Các route nghiệp vụ — Chấn implement (SCRUM-12)
 # ─────────────────────────────────────────────
-# POST /jobs       → tạo job, lưu DB, đẩy RabbitMQ
-# GET  /jobs/{id}  → tra cứu trạng thái job
+# POST /jobs           → tạo job, lưu DB, đẩy RabbitMQ
+# GET  /jobs/{job_id}  → tra cứu trạng thái job
