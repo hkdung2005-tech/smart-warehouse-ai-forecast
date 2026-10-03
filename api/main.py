@@ -10,7 +10,7 @@ import os
 import logging
 import uuid
 from contextlib import asynccontextmanager
-from datetime import timezone
+from datetime import datetime, timezone
 
 import asyncpg
 import aio_pika
@@ -37,6 +37,14 @@ MAIN_QUEUE  = os.getenv("MAIN_QUEUE", "jobs")
 DLQ         = os.getenv("DLQ",        "jobs.dlq")
 # Retry queues được Worker tự tạo động: jobs.retry.1s, jobs.retry.2s, jobs.retry.4s
 MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
+
+
+def _format_timestamp(value: datetime) -> str:
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    else:
+        value = value.astimezone(timezone.utc)
+    return value.isoformat().replace("+00:00", "Z")
 
 
 # ─────────────────────────────────────────────
@@ -212,7 +220,42 @@ async def create_job(body: JobCreateRequest, request: Request):
     return {
         "job_id": job_id,
         "status": "pending",
-        "created_at": created_at.replace(tzinfo=timezone.utc)
-        .isoformat()
-        .replace("+00:00", "Z"),
+        "created_at": _format_timestamp(created_at),
+    }
+
+
+@app.get("/jobs/{job_id}", tags=["jobs"])
+async def get_job(job_id: uuid.UUID, request: Request):
+    try:
+        async with request.app.state.db_pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT job_id, status, result, error_message, retry_count,
+                       created_at, updated_at
+                FROM jobs
+                WHERE job_id = $1
+                """,
+                job_id,
+            )
+    except (asyncpg.PostgresError, OSError, asyncio.TimeoutError):
+        logger.exception("Could not retrieve job %s", job_id)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Service unavailable",
+        )
+
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Job not found",
+        )
+
+    return {
+        "job_id": row["job_id"],
+        "status": row["status"],
+        "result": row["result"],
+        "error_message": row["error_message"],
+        "retry_count": row["retry_count"],
+        "created_at": _format_timestamp(row["created_at"]),
+        "updated_at": _format_timestamp(row["updated_at"]),
     }
