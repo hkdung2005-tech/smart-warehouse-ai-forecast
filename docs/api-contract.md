@@ -1,6 +1,6 @@
 # API Contract (SCRUM-12)
 
-Phiên bản: 1.2 (đã sửa theo Worker của Bảo, SCRUM-18)
+Phiên bản: 1.3 (bổ sung GET /jobs/{job_id}, SCRUM-32)
 Người phụ trách: Chấn
 
 Base URL (chạy local): `http://localhost:8000`
@@ -118,6 +118,7 @@ Lưu ý: `error_message` là lỗi gần nhất Worker ghi nhận (nội dung ph
 Lỗi:
 - `404 Not Found`: không có job với `job_id` này.
 - `422 Unprocessable Entity`: `job_id` không đúng định dạng UUID.
+- `503 Service Unavailable`: không thể kết nối PostgreSQL để tra cứu job.
 
 ## 4. Định dạng lỗi
 
