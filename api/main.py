@@ -136,9 +136,7 @@ async def health(request: Request):
 
 
 # ─────────────────────────────────────────────
-# Placeholder routes — Chấn implement (SCRUM-12)
+# Các route nghiệp vụ — Chấn implement (SCRUM-12)
 # ─────────────────────────────────────────────
 # POST /jobs       → tạo job, lưu DB, đẩy RabbitMQ
 # GET  /jobs/{id}  → tra cứu trạng thái job
-# GET  /dlq        → admin xem DLQ  (FR-07)
-# POST /dlq/{id}/requeue → đưa message về main queue
