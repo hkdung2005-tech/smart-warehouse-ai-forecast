@@ -18,12 +18,9 @@ CREATE TABLE IF NOT EXISTS jobs (
     result        TEXT,
     error_message TEXT,
     retry_count   INTEGER      NOT NULL DEFAULT 0,
-    created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-    updated_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+    created_at    TIMESTAMP    NOT NULL DEFAULT NOW(),
+    updated_at    TIMESTAMP    NOT NULL DEFAULT NOW()
 );
-
--- Index tìm theo status (Worker và Admin hay query)
-CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs (status);
 
 -- ─────────────────────────────────────────────
 -- Bảng job_logs  (1 jobs → nhiều job_logs)
@@ -34,25 +31,5 @@ CREATE TABLE IF NOT EXISTS job_logs (
     event      VARCHAR(50)  NOT NULL,
     -- API ghi:    created | published | publish_failed
     -- Worker ghi: processing | completed | retry_scheduled | moved_to_dlq | failed
-    created_at TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+    created_at TIMESTAMP  NOT NULL DEFAULT NOW()
 );
-
--- Index để JOIN nhanh jobs → job_logs
-CREATE INDEX IF NOT EXISTS idx_job_logs_job_id ON job_logs (job_id);
-
--- ─────────────────────────────────────────────
--- Trigger: tự cập nhật updated_at khi UPDATE jobs
--- ─────────────────────────────────────────────
-CREATE OR REPLACE FUNCTION trigger_set_updated_at()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = NOW();
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-DROP TRIGGER IF EXISTS set_updated_at ON jobs;
-CREATE TRIGGER set_updated_at
-    BEFORE UPDATE ON jobs
-    FOR EACH ROW
-    EXECUTE FUNCTION trigger_set_updated_at();
