@@ -1,6 +1,6 @@
 # API Contract (SCRUM-12)
 
-Phiên bản: 1.1 (đã sửa theo Worker của Bảo, SCRUM-18)
+Phiên bản: 1.2 (đã sửa theo Worker của Bảo, SCRUM-18)
 Người phụ trách: Chấn
 
 Base URL (chạy local): `http://localhost:8000`
