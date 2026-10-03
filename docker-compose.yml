@@ -1,4 +1,4 @@
-version: "3.9"
+# version: "3.9"  # obsolete, removed to avoid warning
 
 services:
   # ─────────────────────────────────────────────
@@ -78,8 +78,8 @@ services:
   # ─────────────────────────────────────────────
   worker:
     build:
-      context: ./worker
-      dockerfile: Dockerfile
+      context: .         # root vì Dockerfile dùng COPY worker/...
+      dockerfile: worker/Dockerfile
     container_name: warehouse_worker
     restart: unless-stopped
     env_file:
