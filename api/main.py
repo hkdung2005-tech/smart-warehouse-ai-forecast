@@ -28,11 +28,11 @@ logger = logging.getLogger("warehouse.api")
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 RABBITMQ_URL = os.getenv("RABBITMQ_URL", "")
 
-# Tên các queue — mặc định nhất quán với docker-compose.yml
-RABBITMQ_MAIN_QUEUE  = os.getenv("RABBITMQ_MAIN_QUEUE",  "warehouse.jobs.main")
-RABBITMQ_RETRY_QUEUE = os.getenv("RABBITMQ_RETRY_QUEUE", "warehouse.jobs.retry")
-RABBITMQ_DLQ         = os.getenv("RABBITMQ_DLQ",         "warehouse.jobs.dlq")
-MAX_RETRY_COUNT      = int(os.getenv("MAX_RETRY_COUNT", "3"))
+# Tên các queue — đồng bộ với worker/config.py của Bảo
+MAIN_QUEUE  = os.getenv("MAIN_QUEUE", "jobs")
+DLQ         = os.getenv("DLQ",        "jobs.dlq")
+# Retry queues được Worker tự tạo động: jobs.retry.1s, jobs.retry.2s, jobs.retry.4s
+MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
 
 
 # ─────────────────────────────────────────────
@@ -60,13 +60,10 @@ async def lifespan(app: FastAPI):
     # ── Khai báo queue (idempotent) ──────────
     async with app.state.rmq_connection.channel() as ch:
         # DLQ khai báo trước (main queue cần biết tên DLQ)
-        await ch.declare_queue(RABBITMQ_DLQ,         durable=True)
-        await ch.declare_queue(RABBITMQ_RETRY_QUEUE, durable=True)
-        await ch.declare_queue(RABBITMQ_MAIN_QUEUE,  durable=True)
-        logger.info(
-            "Queues declared: %s | %s | %s",
-            RABBITMQ_MAIN_QUEUE, RABBITMQ_RETRY_QUEUE, RABBITMQ_DLQ,
-        )
+        await ch.declare_queue(DLQ,        durable=True)
+        await ch.declare_queue(MAIN_QUEUE, durable=True)
+        # Retry queues do Worker tự declare khi khởi động
+        logger.info("Queues declared: %s | DLQ: %s", MAIN_QUEUE, DLQ)
 
     yield  # ── ứng dụng đang chạy ────────────
 
@@ -128,9 +125,8 @@ async def health(request: Request):
         "status": overall_status,
         "checks": checks,
         "queues": {
-            "main":  RABBITMQ_MAIN_QUEUE,
-            "retry": RABBITMQ_RETRY_QUEUE,
-            "dlq":   RABBITMQ_DLQ,
+            "main": MAIN_QUEUE,
+            "dlq":  DLQ,
         },
     }
 

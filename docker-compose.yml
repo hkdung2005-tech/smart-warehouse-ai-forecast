@@ -62,10 +62,9 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-warehouse}:${POSTGRES_PASSWORD:-warehouse}@postgres:5432/${POSTGRES_DB:-warehouse_db}
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672/
-      RABBITMQ_MAIN_QUEUE: ${RABBITMQ_MAIN_QUEUE:-warehouse.jobs.main}
-      RABBITMQ_RETRY_QUEUE: ${RABBITMQ_RETRY_QUEUE:-warehouse.jobs.retry}
-      RABBITMQ_DLQ: ${RABBITMQ_DLQ:-warehouse.jobs.dlq}
-      MAX_RETRY_COUNT: ${MAX_RETRY_COUNT:-3}
+      MAIN_QUEUE: ${MAIN_QUEUE:-jobs}
+      DLQ: ${DLQ:-jobs.dlq}
+      MAX_RETRIES: ${MAX_RETRIES:-3}
     depends_on:
       rabbitmq:
         condition: service_healthy
