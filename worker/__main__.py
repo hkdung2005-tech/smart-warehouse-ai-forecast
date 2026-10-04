@@ -39,11 +39,15 @@ def _publish(channel, queue: str, body: bytes, headers: dict):
 def _handle(channel, method, properties, body):
     try:
         job = json.loads(body)
+        if not isinstance(job, dict):
+            raise ValueError("message JSON must be an object")
         job_id, payload = job.get("job_id"), job.get("payload")
-        retries = int(job.get("retry_count", 0))
-        if not isinstance(job_id, str) or not job_id or not isinstance(payload, str) or not payload.strip():
-            raise ValueError("message must contain non-empty job_id and payload")
-    except (ValueError, TypeError, json.JSONDecodeError) as exc:
+        retries = job.get("retry_count", 0)
+        if not isinstance(job_id, str) or not job_id.strip() or not isinstance(payload, str) or not payload.strip():
+            raise ValueError("message must contain non-empty string job_id and payload")
+        if isinstance(retries, bool) or not isinstance(retries, int) or retries < 0:
+            raise ValueError("retry_count must be a non-negative integer")
+    except (ValueError, TypeError, UnicodeError, json.JSONDecodeError) as exc:
         log.error("Discarding malformed message: %s", exc)
         try:
             _publish(channel, DLQ, body, {"x-error": str(exc)[:500]})

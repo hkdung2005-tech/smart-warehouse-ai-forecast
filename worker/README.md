@@ -14,6 +14,8 @@ Worker nhận job từ RabbitMQ, gọi endpoint tương thích Gemini và lưu c
 
 Worker retry khi gặp lỗi `429`, `5xx` hoặc timeout. Các lỗi HTTP khác là lỗi vĩnh viễn: job được chuyển sang trạng thái `failed` mà không đưa vào DLQ. Sau ba lần retry, nếu vẫn gặp lỗi có thể retry, worker gửi message vào DLQ kèm header `x-error` và `x-retry-count`. Queue và message đều được lưu bền vững trong RabbitMQ. Consumer dùng manual acknowledgement và publisher confirm; worker chỉ ack sau khi cập nhật DB và publish retry/DLQ thành công.
 
+`MAX_RETRIES=3` là ba lần retry sau lần gọi đầu tiên, tức tối đa bốn lần gọi Gemini. Ba khoảng chờ lần lượt là 1, 2 và 4 giây. Khi xếp retry, worker tăng `retry_count`, đặt job thành `retrying`, lưu lỗi gần nhất và ghi event `retry_scheduled`. Nếu lần gọi thứ tư vẫn gặp lỗi tạm thời, worker chuyển message vào `jobs.dlq`, đặt trạng thái `failed` và ghi event `moved_to_dlq`. Lỗi vĩnh viễn (bao gồm HTTP 4xx và response HTTP 200 không có JSON object chứa `result` dạng chuỗi) đặt trạng thái `failed`, ghi event `failed` và không vào DLQ. Message không hợp lệ được đưa vào DLQ mà không cập nhật DB.
+
 Rate limiter mặc định cho phép tối đa 10 lần gọi Gemini mỗi giây trên mỗi tiến trình worker. `prefetch_count=1` giới hạn mỗi tiến trình chỉ nhận một job chưa ack tại một thời điểm. Nếu chạy nhiều worker replica, cần cấu hình rate limiter dùng chung để giới hạn tổng số request giữa các replica.
 
 ## Cấu hình

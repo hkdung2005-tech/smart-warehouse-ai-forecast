@@ -23,6 +23,8 @@ def generate(payload: str) -> str:
         data = response.json()
     except ValueError as exc:
         raise GeminiError("Gemini response must be JSON", response.status_code) from exc
+    if not isinstance(data, dict):
+        raise GeminiError("Gemini response must be a JSON object", response.status_code)
     result = data.get("result")
     if not isinstance(result, str):
         raise GeminiError("Gemini response must contain a string 'result'", response.status_code)
