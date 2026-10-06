@@ -5,6 +5,7 @@
 - [User Stories](user-stories.md)
 - [API Contract](api-contract.md)
 - [Tech Stack](tech-stack.md)
+- [Test Cases](test-cases.md)
 - [Quy tắc Git](git-rules.md)
 - Use Case Diagram: usecase-diagram.png
 - ERD: erd-phase1.png
