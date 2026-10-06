@@ -66,8 +66,18 @@ async def lifespan(app: FastAPI):
 
     # ── RabbitMQ connection ──────────────────
     logger.info("Connecting to RabbitMQ …")
-    app.state.rmq_connection = await aio_pika.connect_robust(RABBITMQ_URL)
-    logger.info("RabbitMQ connection ready ✓")
+    max_rmq_retries = 5
+    for attempt in range(1, max_rmq_retries + 1):
+        try:
+            app.state.rmq_connection = await aio_pika.connect_robust(RABBITMQ_URL)
+            logger.info("RabbitMQ connection ready ✓")
+            break
+        except Exception as e:
+            if attempt == max_rmq_retries:
+                logger.exception("Failed to connect to RabbitMQ after %d attempts.", max_rmq_retries)
+                raise
+            logger.warning("RabbitMQ connection failed (attempt %d/%d): %s. Retrying in 2s...", attempt, max_rmq_retries, e)
+            await asyncio.sleep(2)
 
     # ── Khai báo queue (idempotent) ──────────
     async with app.state.rmq_connection.channel() as ch:
