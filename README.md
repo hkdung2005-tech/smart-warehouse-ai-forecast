@@ -10,3 +10,4 @@ docker compose up --build
 ```
 
 M? http://localhost:8000/docs d? xem API documentation.
+link deploy: https://smart-warehouse-ai-forecast.onrender.com/
