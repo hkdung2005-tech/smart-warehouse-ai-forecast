@@ -2,3 +2,5 @@
 __pycache__/
 venv/
 *.pyc
+# Locust reports
+loadtest/report_*

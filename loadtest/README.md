@@ -21,31 +21,36 @@ pip install locust
 ## 3. Lựa chọn mức tải
 
 Theo yêu cầu của hệ thống (Worker giới hạn tối đa 10 lần gọi Gemini/giây):
-- **Tải 1x (10 users)**: Đại diện cho mức tải bình thường. 10 users bắn request với tần suất vừa phải sẽ sinh ra khoảng 20-30 request/s, cho phép Worker xử lý nhịp nhàng mà không làm đầy queue quá nhanh.
-- **Tải 10x (100 users)**: Đại diện cho mức ép tải hệ thống gấp 10 lần (khoảng 200-300 request/s). Lúc này API vẫn tiếp nhận bình thường (trả 202) nhưng queue RabbitMQ sẽ phình to ra và Worker sẽ phải cật lực xử lý ở mức tối đa 10 job/giây.
+- **Tải 1x (3 users)**: Đại diện cho mức tải bình thường. 3 users bắn request (khoảng 3 request/s mỗi user) sẽ sinh ra tổng cộng khoảng 9-10 request/s, xấp xỉ ngưỡng của Worker. Ở mức này, queue không bị phình quá to và hệ thống xử lý nhịp nhàng.
+- **Tải 10x (30 users)**: Đại diện cho mức ép tải hệ thống gấp 10 lần (khoảng 90-100 request/s). Lúc này API vẫn tiếp nhận bình thường (trả 202) nhưng queue RabbitMQ sẽ phình to ra và Worker sẽ phải cật lực xử lý ở mức tối đa 10 job/giây.
 
 ## 4. Cách chạy test và lấy báo cáo (Headless)
 
 Theo yêu cầu của TC-NFR-01, cần xuất báo cáo CSV và HTML cho từng mức tải mà không cần thao tác thủ công trên giao diện web.
 
-**Chạy tải 1x (10 users) trong 1 phút:**
+**Chạy tải 1x (3 users) trong 1 phút:**
 ```bash
-locust -f locustfile.py --host=http://localhost:8000 --headless -u 10 -r 5 -t 1m --csv=report_1x --html=report_1x.html
+locust -f locustfile.py --host=http://localhost:8000 --headless -u 3 -r 1 -t 1m --csv=report_1x --html=report_1x.html
 ```
 
-**Chạy tải 10x (100 users) trong 1 phút:**
+**Chạy tải 10x (30 users) trong 1 phút:**
 ```bash
-locust -f locustfile.py --host=http://localhost:8000 --headless -u 100 -r 10 -t 1m --csv=report_10x --html=report_10x.html
+locust -f locustfile.py --host=http://localhost:8000 --headless -u 30 -r 5 -t 1m --csv=report_10x --html=report_10x.html
 ```
 
 Các file báo cáo (`report_1x.html`, `report_1x_stats.csv`, v.v.) sẽ được tự động tạo ra trong cùng thư mục `loadtest`. Bạn có thể dùng các file này để đọc Throughput (Requests/s), Error rate (Failures/s) và Latency.
 
 ## 5. Đối chiếu kết quả với Database
 
-Sau khi chạy xong Locust, chờ một khoảng thời gian cho đến khi Worker xử lý hết hàng đợi (do Worker bị giới hạn 10 request/giây). Sau đó chạy lệnh sau để kiểm tra dữ liệu:
+⚠️ **Quan trọng:** Để số liệu đếm của lệnh SQL không bị nhầm lẫn giữa các lần chạy, bạn **phải xóa sạch dữ liệu cũ** trong database trước khi bắt đầu bài test tiếp theo (ví dụ: chuyển từ 1x sang 10x):
+```bash
+docker compose exec postgres psql -U postgres -d warehouse -c "TRUNCATE TABLE job_logs, jobs;"
+```
+
+Sau khi chạy xong bài test bằng Locust, hãy chờ một khoảng thời gian cho đến khi Worker xử lý hết hàng đợi (vì Worker bị giới hạn 10 request/giây). Sau đó chạy lệnh sau để kiểm tra dữ liệu:
 
 ```bash
 docker compose exec postgres psql -U postgres -d warehouse -c "SELECT status, COUNT(*) FROM jobs GROUP BY status;"
 ```
 
-Số lượng `completed` + `failed` phải bằng đúng số `Requests` thành công ghi nhận trong file báo cáo CSV của Locust. Không được còn job nào bị kẹt ở `pending`, `processing` hay `retrying`.
+Số lượng `completed` + `failed` thu được từ câu lệnh trên phải bằng đúng số `Requests` thành công ghi nhận trong file báo cáo CSV của Locust. Không được còn job nào bị kẹt ở trạng thái `pending`, `processing` hay `retrying`.
