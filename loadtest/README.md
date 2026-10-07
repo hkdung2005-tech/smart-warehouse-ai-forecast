@@ -21,8 +21,8 @@ pip install locust
 ## 3. Lựa chọn mức tải
 
 Theo yêu cầu của hệ thống (Worker giới hạn tối đa 10 lần gọi Gemini/giây):
-- **Tải 1x (3 users)**: Đại diện cho mức tải bình thường. 3 users bắn request (khoảng 3 request/s mỗi user) sẽ sinh ra tổng cộng khoảng 9-10 request/s, xấp xỉ ngưỡng của Worker. Ở mức này, queue không bị phình quá to và hệ thống xử lý nhịp nhàng.
-- **Tải 10x (30 users)**: Đại diện cho mức ép tải hệ thống gấp 10 lần (khoảng 90-100 request/s). Lúc này API vẫn tiếp nhận bình thường (trả 202) nhưng queue RabbitMQ sẽ phình to ra và Worker sẽ phải cật lực xử lý ở mức tối đa 10 job/giây.
+- **Tải 1x (3 users)**: Đại diện cho mức tải bình thường. 3 users bắn request sẽ sinh ra tổng cộng khoảng 8 request/s (theo kết quả test thực tế), xấp xỉ ngưỡng của Worker. Ở mức này, queue không bị phình quá to và hệ thống xử lý nhịp nhàng.
+- **Tải 10x (30 users)**: Đại diện cho mức ép tải hệ thống gấp 10 lần (khoảng 79-80 request/s). Lúc này API vẫn tiếp nhận bình thường (trả 202) nhưng queue RabbitMQ sẽ phình to ra và Worker sẽ phải cật lực xử lý ở mức tối đa 10 job/giây.
 
 ## 4. Cách chạy test và lấy báo cáo (Headless)
 
@@ -46,6 +46,7 @@ Các file báo cáo (`report_1x.html`, `report_1x_stats.csv`, v.v.) sẽ đượ
 ```bash
 docker compose exec postgres psql -U postgres -d warehouse -c "TRUNCATE TABLE job_logs, jobs;"
 ```
+*(Lưu ý: Nếu file `.env` của bạn cấu hình `POSTGRES_USER` và `POSTGRES_DB` khác mặc định, ví dụ `warehouse` và `warehouse_db`, hãy thay thế `-U postgres -d warehouse` bằng các giá trị tương ứng).*
 
 Sau khi chạy xong bài test bằng Locust, hãy chờ một khoảng thời gian cho đến khi Worker xử lý hết hàng đợi (vì Worker bị giới hạn 10 request/giây). Sau đó chạy lệnh sau để kiểm tra dữ liệu:
 
