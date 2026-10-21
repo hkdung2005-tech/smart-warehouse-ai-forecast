@@ -9,5 +9,14 @@ cp .env.example .env
 docker compose up --build
 ```
 
-M? http://localhost:8000/docs d? xem API documentation.
-link deploy: https://smart-warehouse-ai-forecast.onrender.com/
+Sau khi các dịch vụ khởi động:
+
+- API docs (Swagger): http://localhost:8000/docs
+- RabbitMQ Management UI: http://localhost:15672
+- Mock Gemini: http://localhost:9000
+
+Link deploy: https://smart-warehouse-ai-forecast.onrender.com/
+
+## Tài liệu
+
+Xem thư mục [`docs/`](docs/README.md) (SRS, User Stories, API Contract, Test Cases...).
